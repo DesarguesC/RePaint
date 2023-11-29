@@ -25,7 +25,7 @@ import torch as th
 import torch.nn.functional as F
 import time
 import conf_mgt
-from utils import yamlread
+from utils import yamlread, str2bool
 from guided_diffusion import dist_util
 
 # Workaround
@@ -56,7 +56,7 @@ def toU8(sample):
     return sample
 
 
-def main(conf: conf_mgt.Default_Conf):
+def main(opt, conf: conf_mgt.Default_Conf):
 
     print("Start", conf['name'])
 
@@ -75,7 +75,7 @@ def main(conf: conf_mgt.Default_Conf):
         model.convert_to_fp16()
     model.eval()
 
-    show_progress = conf.show_progress
+    show_progress = opt.show_progress
 
     if conf.classifier_scale > 0 and conf.classifier_path:
         print("loading classifier...")
@@ -141,14 +141,14 @@ def main(conf: conf_mgt.Default_Conf):
             model_kwargs["y"] = classes
 
         sample_fn = (
-            diffusion.p_sample_loop if not conf.use_ddim else diffusion.ddim_sample_loop
+            diffusion.p_sample_loop if not opt.use_ddim else diffusion.ddim_sample_loop
         )
 
 
         result = sample_fn(
             model_fn,
-            (batch_size, 3, conf.image_size, conf.image_size),
-            clip_denoised=conf.clip_denoised,
+            (batch_size, 3, opt.H, opt.W),
+            clip_denoised=opt.clip_denoised,
             model_kwargs=model_kwargs,
             cond_fn=cond_fn,
             device=device,
@@ -173,8 +173,19 @@ def main(conf: conf_mgt.Default_Conf):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--conf_path', type=str, required=False, default=None)
+    parser.add_argument('--show_progress', type=str2bool, required=False, default=True)
+    parser.add_argument('--use_ddim', type=str2bool, required=False, default=False)
+    parser.add_argument('--clip_denoised', type=str2bool, required=False, default=True)
+    parser.add_argument('--model_path', type=str, required=False, default="/root/autodl-tmp/data/pretrained/celeba256_250000.pt")
+    parser.add_argument('--gt_path', type=str, required=False,
+                        default="/root/autodl-tmp/data/datasets/gts/face")
+    parser.add_argument('--mask_path', type=str, required=False,
+                        default="/root/autodl-tmp/data/datasets/gt_keep_masks/face")
+    parser.add_argument('--W', type=int, required=False, default=512)
+    parser.add_argument('--H', type=int, required=False, default=512)
+
     args = vars(parser.parse_args())
 
     conf_arg = conf_mgt.conf_base.Default_Conf()
     conf_arg.update(yamlread(args.get('conf_path')))
-    main(conf_arg)
+    main(args, conf_arg)

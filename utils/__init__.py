@@ -17,7 +17,7 @@
 import yaml
 import os
 from PIL import Image
-
+import argparse
 
 def txtread(path):
     path = os.path.expanduser(path)
@@ -30,3 +30,14 @@ def yamlread(path):
 
 def imwrite(path=None, img=None):
     Image.fromarray(img).save(path)
+
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+

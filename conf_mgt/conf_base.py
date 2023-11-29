@@ -54,16 +54,24 @@ class NoneDict(defaultdict):
 
 
 class Default_Conf(NoneDict):
-    def __init__(self):
+    def __init__(self, opt=None):
+        assert opt != None, 'opt not initialized'
+        self.opt = opt
         pass
 
     def get_dataloader(self, dset='train', dsName=None, batch_size=None, return_dataset=False):
 
-        if batch_size is None:
-            batch_size = self.batch_size
+
 
         candidates = self['data'][dset]
         ds_conf = candidates[dsName].copy()
+
+        if batch_size is None:
+            batch_size = ds_conf['batch_size']
+
+        ds_conf['gt_path'] = self.opt.gt_path
+        ds_conf['mask_path'] = self.opt.mask_path
+
 
         if ds_conf.get('mask_loader', False):
             from guided_diffusion.image_datasets import load_data_inpa
