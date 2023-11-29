@@ -68,7 +68,7 @@ def main(opt, conf: conf_mgt.Default_Conf):
     )
     model.load_state_dict(
         dist_util.load_state_dict(os.path.expanduser(
-            conf.model_path), map_location="cpu")
+            opt.model_path), map_location="cpu")
     )
     model.to(device)
     if conf.use_fp16:
@@ -184,8 +184,8 @@ if __name__ == "__main__":
     parser.add_argument('--W', type=int, required=False, default=512)
     parser.add_argument('--H', type=int, required=False, default=512)
 
-    args = vars(parser.parse_args())
+    opt = parser.parse_args()
 
-    conf_arg = conf_mgt.conf_base.Default_Conf()
-    conf_arg.update(yamlread(args.get('conf_path')))
-    main(args, conf_arg)
+    conf_arg = conf_mgt.conf_base.Default_Conf(opt)
+    conf_arg.update(yamlread(opt.conf_path))
+    main(opt, conf_arg)
