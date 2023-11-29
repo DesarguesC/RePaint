@@ -124,6 +124,7 @@ def main(opt, conf: conf_mgt.Default_Conf):
         model_kwargs = {}
 
         model_kwargs["gt"] = batch['GT']
+        # read original image in: torch.size[1,3,w,h]
 
         gt_keep_mask = batch.get('gt_keep_mask')
         if gt_keep_mask is not None:
