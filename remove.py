@@ -25,9 +25,10 @@ import torch, cv2
 import torch.nn.functional as F
 import time
 import conf_mgt
-from utils import yamlread, str2bool
+from utils import yamlread, str2bool, ab64
 from guided_diffusion import dist_util
 from einops import rearrange, repeat
+import numpy as np
 
 # Workaround
 try:
@@ -59,7 +60,7 @@ def toU8(sample):
 
 def main(opt, batch, conf: conf_mgt.Default_Conf):
     print("Start", conf['name'])
-    device = dist_util.dev(conf.get('device'))
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model, diffusion = create_model_and_diffusion(
         **select_args(conf, model_and_diffusion_defaults().keys()), conf=conf
     )
@@ -101,6 +102,7 @@ def main(opt, batch, conf: conf_mgt.Default_Conf):
 
     def model_fn(x, t, y=None, gt=None, **kwargs):
         assert y is not None
+        # print(f'x.shape = {x.shape}, gt.shape = {gt.shape}')
         return model(x, t, y if conf.class_cond else None, gt=gt)
 
     print("sampling...")
@@ -167,21 +169,24 @@ if __name__ == "__main__":
                         default="/root/autodl-tmp/assets/01.png")
     parser.add_argument('--mask_path', type=str, required=False,
                         default="/root/autodl-tmp/assets/mask.jpg")
-    parser.add_argument('--W', type=int, required=False, default=512)
-    parser.add_argument('--H', type=int, required=False, default=512)
+    parser.add_argument('--W', type=int, required=False, default=None)
+    parser.add_argument('--H', type=int, required=False, default=None)
 
     opt = parser.parse_args()
 
     conf_arg = conf_mgt.conf_base.Default_Conf(opt)
     conf_arg.update(yamlread(opt.conf_path))
+    opt.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    img, mask = torch.tensor(cv2.imread(opt.image_path)), torch.tensor(cv2.imread(opt.mask_path))
-    img = rearrange(img, 'h w c -> 1 c h w')
-    mask = rearrange(mask, 'h w c -> 1 c h w')
+    img, mask = cv2.imread(opt.image_path), cv2.imread(opt.mask_path)
+    assert img.shape == mask.shape, f'img.shape = {img.shape}, mask.shape = {mask.shape}'
+    h, w = (ab64(img.shape[0]), ab64(img.shape[1])) if opt.H is None or opt.W is None else (opt.H, opt.W)
+    img,  = rearrange(torch.tensor(cv2.resize(img, (h,w))), 'h w c -> 1 c h w')
+    mask = rearrange(torch.tensor(cv2.resize(mask, (h,w))), 'h w c -> 1 c h w')
     opt.H, opt.W = img.shape[-2:]
     batch = {
-        'gt': img,
-        'gt_keep_mask': mask
+        'gt': img.to(opt.device),
+        'gt_keep_mask': mask.to(opt.device)
     }
 
     main(opt, batch, conf_arg)

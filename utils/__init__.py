@@ -41,3 +41,10 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+def ab64(x):
+    if (x-x//64*64)<32: return x//64*64
+    else: return (x//64+1)*64
+
+def ab8(x):
+    if (x-x//8*8)<4: return x//8*8
+    else: return (x//8+1)*8

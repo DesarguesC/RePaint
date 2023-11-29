@@ -501,13 +501,16 @@ class GaussianDiffusion:
 
         if conf.schedule_jump_params:
             times = get_schedule_jump(**conf.schedule_jump_params)
-
+            # print(f'len(times)={len(times)}')
+            # times = np.arange(100)
             time_pairs = list(zip(times[:-1], times[1:]))
+            
             if progress:
                 from tqdm.auto import tqdm
                 time_pairs = tqdm(time_pairs)
 
             for t_last, t_cur in time_pairs:
+                # print(f'(t_last, t_cur) = {(t_last, t_cur)}')
                 idx_wall += 1
                 t_last_t = th.tensor([t_last] * shape[0],  # pylint: disable=not-callable
                                      device=device)
