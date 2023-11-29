@@ -9,7 +9,7 @@ checkpoints/
 static-crfill/* # object removed images
 static-inpaint/* 
 static/*
-
+log/*
 *.csv
 # *.txt
 *.docx
