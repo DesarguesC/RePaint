@@ -21,12 +21,13 @@ process towards more realistic images.
 
 import os
 import argparse
-import torch as th
+import torch, cv2
 import torch.nn.functional as F
 import time
 import conf_mgt
 from utils import yamlread, str2bool
 from guided_diffusion import dist_util
+from einops import rearrange, repeat
 
 # Workaround
 try:
@@ -49,20 +50,16 @@ def toU8(sample):
     if sample is None:
         return sample
 
-    sample = ((sample + 1) * 127.5).clamp(0, 255).to(th.uint8)
+    sample = ((sample + 1) * 127.5).clamp(0, 255).to(torch.uint8)
     sample = sample.permute(0, 2, 3, 1)
     sample = sample.contiguous()
     sample = sample.detach().cpu().numpy()
     return sample
 
 
-def main(opt, conf: conf_mgt.Default_Conf):
-
+def main(opt, batch, conf: conf_mgt.Default_Conf):
     print("Start", conf['name'])
-
     device = dist_util.dev(conf.get('device'))
-
-
     model, diffusion = create_model_and_diffusion(
         **select_args(conf, model_and_diffusion_defaults().keys()), conf=conf
     )
@@ -93,12 +90,12 @@ def main(opt, conf: conf_mgt.Default_Conf):
 
         def cond_fn(x, t, y=None, gt=None, **kwargs):
             assert y is not None
-            with th.enable_grad():
+            with torch.enable_grad():
                 x_in = x.detach().requires_grad_(True)
                 logits = classifier(x_in, t)
                 log_probs = F.log_softmax(logits, dim=-1)
                 selected = log_probs[range(len(logits)), y.view(-1)]
-                return th.autograd.grad(selected.sum(), x_in)[0] * conf.classifier_scale
+                return torch.autograd.grad(selected.sum(), x_in)[0] * conf.classifier_scale
     else:
         cond_fn = None
 
@@ -120,10 +117,10 @@ def main(opt, conf: conf_mgt.Default_Conf):
     batch_size = model_kwargs["gt"].shape[0]
 
     if conf.cond_y is not None:
-        classes = th.ones(batch_size, dtype=th.long, device=device)
+        classes = torch.ones(batch_size, dtype=torch.long, device=device)
         model_kwargs["y"] = classes * conf.cond_y
     else:
-        classes = th.randint(
+        classes = torch.randint(
             low=0, high=NUM_CLASSES, size=(batch_size,), device=device
         )
         model_kwargs["y"] = classes
@@ -147,7 +144,7 @@ def main(opt, conf: conf_mgt.Default_Conf):
     srs = toU8(result['sample'])
     gts = toU8(result['gt'])
     lrs = toU8(result['gt'] * model_kwargs['gt_keep_mask'] + (-1) *
-               th.ones_like(result['gt']) * (1 - model_kwargs['gt_keep_mask']))
+               torch.ones_like(result['gt']) * (1 - model_kwargs['gt_keep_mask']))
 
     gt_keep_masks = toU8((model_kwargs['gt_keep_mask'] * 2 - 1))
 
@@ -166,10 +163,10 @@ if __name__ == "__main__":
     parser.add_argument('--use_ddim', type=str2bool, required=False, default=False)
     parser.add_argument('--clip_denoised', type=str2bool, required=False, default=True)
     parser.add_argument('--model_path', type=str, required=False, default="/root/autodl-tmp/data/pretrained/celeba256_250000.pt")
-    parser.add_argument('--gt_path', type=str, required=False,
-                        default="/root/autodl-tmp/data/datasets/gts/face")
+    parser.add_argument('--image_path', type=str, required=False,
+                        default="/root/autodl-tmp/assets/01.png")
     parser.add_argument('--mask_path', type=str, required=False,
-                        default="/root/autodl-tmp/data/datasets/gt_keep_masks/face")
+                        default="/root/autodl-tmp/assets/mask.jpg")
     parser.add_argument('--W', type=int, required=False, default=512)
     parser.add_argument('--H', type=int, required=False, default=512)
 
@@ -177,4 +174,14 @@ if __name__ == "__main__":
 
     conf_arg = conf_mgt.conf_base.Default_Conf(opt)
     conf_arg.update(yamlread(opt.conf_path))
-    main(opt, conf_arg)
+
+    img, mask = torch.tensor(cv2.imread(opt.image_path)), torch.tensor(cv2.imread(opt.mask_path))
+    img = rearrange(img, 'h w c -> 1 c h w')
+    mask = rearrange(mask, 'h w c -> 1 c h w')
+    opt.H, opt.W = img.shape[-2:]
+    batch = {
+        'gt': img,
+        'gt_keep_mask': mask
+    }
+
+    main(opt, batch, conf_arg)
